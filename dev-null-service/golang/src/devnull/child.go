@@ -136,16 +136,14 @@ func (r *response) Close() error {
 
 type child struct {
 	conn    *conn
-	handler http.Handler
 
 	mu       sync.Mutex          // protects requests:
 	requests map[uint16]*request // keyed by request ID
 }
 
-func newChild(rwc io.ReadWriteCloser, handler http.Handler) *child {
+func newChild(rwc io.ReadWriteCloser) *child {
 	return &child{
 		conn:     newConn(rwc),
-		handler:  handler,
 		requests: make(map[uint16]*request),
 	}
 }
@@ -288,7 +286,6 @@ func (c *child) serveRequest(req *request, body io.ReadCloser) {
 		withoutUsedEnvVars := filterOutUsedEnvVars(req.params)
 		envVarCtx := context.WithValue(httpReq.Context(), envVarsContextKey{}, withoutUsedEnvVars)
 		httpReq = httpReq.WithContext(envVarCtx)
-		c.handler.ServeHTTP(r, httpReq)
 	}
 	r.Close()
 	c.mu.Lock()
@@ -328,7 +325,7 @@ func (c *child) cleanUp() {
 // to reply to them.
 // If l is nil, Serve accepts connections from os.Stdin.
 // If handler is nil, http.DefaultServeMux is used.
-func Serve(l net.Listener, handler http.Handler) error {
+func Serve(l net.Listener) error {
 	if l == nil {
 		var err error
 		l, err = net.FileListener(os.Stdin)
@@ -337,15 +334,12 @@ func Serve(l net.Listener, handler http.Handler) error {
 		}
 		defer l.Close()
 	}
-	if handler == nil {
-		handler = http.DefaultServeMux
-	}
 	for {
 		rw, err := l.Accept()
 		if err != nil {
 			return err
 		}
-		c := newChild(rw, handler)
+		c := newChild(rw)
 		go c.serve()
 	}
 }

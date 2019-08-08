@@ -25,5 +25,5 @@ func main() {
 		log.Fatal(err)
 	}
 
-	devnull.Serve(l, emptyHandler{})
+	devnull.Serve(l)
 }

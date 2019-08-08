@@ -8,8 +8,22 @@
 package main
 
 import (
-    "devnull"
+	"devnull"
+	"log"
+	"net"
+	"net/http"
 )
 
+type emptyHandler struct{}
+
+func (e emptyHandler) ServeHTTP(r http.ResponseWriter, req *http.Request) {
+}
+
 func main() {
+	l, err := net.Listen("tcp", ":9000")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	devnull.Serve(l, emptyHandler{})
 }

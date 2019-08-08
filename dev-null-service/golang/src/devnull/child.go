@@ -7,14 +7,12 @@ package devnull
 // This file implements FastCGI from the perspective of a child process.
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/http/cgi"
 	"os"
 	"strings"
 	"sync"
@@ -26,9 +24,6 @@ import (
 type request struct {
 	pw        *io.PipeWriter
 	reqId     uint16
-	params    map[string]string
-	buf       [1024]byte
-	rawParams []byte
 	keepConn  bool
 }
 
@@ -39,37 +34,9 @@ type envVarsContextKey struct{}
 func newRequest(reqId uint16, flags uint8) *request {
 	r := &request{
 		reqId:    reqId,
-		params:   map[string]string{},
 		keepConn: flags&flagKeepConn != 0,
 	}
-	r.rawParams = r.buf[:0]
 	return r
-}
-
-// parseParams reads an encoded []byte into Params.
-func (r *request) parseParams() {
-	text := r.rawParams
-	r.rawParams = nil
-	for len(text) > 0 {
-		keyLen, n := readSize(text)
-		if n == 0 {
-			return
-		}
-		text = text[n:]
-		valLen, n := readSize(text)
-		if n == 0 {
-			return
-		}
-		text = text[n:]
-		if int(keyLen)+int(valLen) > len(text) {
-			return
-		}
-		key := readString(text, keyLen)
-		text = text[keyLen:]
-		val := readString(text, valLen)
-		text = text[valLen:]
-		r.params[key] = val
-	}
 }
 
 // response implements http.ResponseWriter.
@@ -208,10 +175,8 @@ func (c *child) handleRecord(rec *record) error {
 		// NOTE(eds): Technically a key-value pair can straddle the boundary
 		// between two packets. We buffer until we've received all parameters.
 		if len(rec.content()) > 0 {
-			req.rawParams = append(req.rawParams, rec.content()...)
 			return nil
 		}
-		req.parseParams()
 		return nil
 	case typeStdin:
 		content := rec.content()
@@ -276,17 +241,6 @@ func filterOutUsedEnvVars(envVars map[string]string) map[string]string {
 
 func (c *child) serveRequest(req *request, body io.ReadCloser) {
 	r := newResponse(c, req)
-	httpReq, err := cgi.RequestFromMap(req.params)
-	if err != nil {
-		// there was an error reading the request
-		r.WriteHeader(http.StatusInternalServerError)
-		c.conn.writeRecord(typeStderr, req.reqId, []byte(err.Error()))
-	} else {
-		httpReq.Body = body
-		withoutUsedEnvVars := filterOutUsedEnvVars(req.params)
-		envVarCtx := context.WithValue(httpReq.Context(), envVarsContextKey{}, withoutUsedEnvVars)
-		httpReq = httpReq.WithContext(envVarCtx)
-	}
 	r.Close()
 	c.mu.Lock()
 	delete(c.requests, req.reqId)

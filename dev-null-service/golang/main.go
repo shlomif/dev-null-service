@@ -8,7 +8,7 @@
 package main
 
 import (
-    "devnull/fcgi/child"
+    "devnull"
 )
 
 func main() {

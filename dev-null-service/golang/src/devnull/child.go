@@ -227,18 +227,6 @@ func (c *child) handleRecord(rec *record) error {
 	}
 }
 
-// filterOutUsedEnvVars returns a new map of env vars without the
-// variables in the given envVars map that are read for creating each http.Request
-func filterOutUsedEnvVars(envVars map[string]string) map[string]string {
-	withoutUsedEnvVars := make(map[string]string)
-	for k, v := range envVars {
-		if addFastCGIEnvToContext(k) {
-			withoutUsedEnvVars[k] = v
-		}
-	}
-	return withoutUsedEnvVars
-}
-
 func (c *child) serveRequest(req *request, body io.ReadCloser) {
 	r := newResponse(c, req)
 	r.Close()
@@ -296,40 +284,4 @@ func Serve(l net.Listener) error {
 		c := newChild(rw)
 		go c.serve()
 	}
-}
-
-// ProcessEnv returns FastCGI environment variables associated with the request r
-// for which no effort was made to be included in the request itself - the data
-// is hidden in the request's context. As an example, if REMOTE_USER is set for a
-// request, it will not be found anywhere in r, but it will be included in
-// ProcessEnv's response (via r's context).
-func ProcessEnv(r *http.Request) map[string]string {
-	env, _ := r.Context().Value(envVarsContextKey{}).(map[string]string)
-	return env
-}
-
-// addFastCGIEnvToContext reports whether to include the FastCGI environment variable s
-// in the http.Request.Context, accessible via ProcessEnv.
-func addFastCGIEnvToContext(s string) bool {
-	// Exclude things supported by net/http natively:
-	switch s {
-	case "CONTENT_LENGTH", "CONTENT_TYPE", "HTTPS",
-		"PATH_INFO", "QUERY_STRING", "REMOTE_ADDR",
-		"REMOTE_HOST", "REMOTE_PORT", "REQUEST_METHOD",
-		"REQUEST_URI", "SCRIPT_NAME", "SERVER_PROTOCOL":
-		return false
-	}
-	if strings.HasPrefix(s, "HTTP_") {
-		return false
-	}
-	// Explicitly include FastCGI-specific things.
-	// This list is redundant with the default "return true" below.
-	// Consider this documentation of the sorts of things we expect
-	// to maybe see.
-	switch s {
-	case "REMOTE_USER":
-		return true
-	}
-	// Unknown, so include it to be safe.
-	return true
 }

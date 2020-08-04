@@ -28,6 +28,10 @@ class Echo(protocol.Protocol):
             self.header += data
             if "\r\n\r\n".encode('utf-8') in self.header:
                 self.state = self.AFTER_HEADER
+                self.transport.write(
+                    ("HTTP/1.1 200 OK\r\nContent-Type: text/html" +
+                     "\r\n\r\n<html></html>").encode('utf-8'))
+                self.transport.loseConnection()
             elif len(self.header) > self.MAX_HEADER_LEN:
                 self.state = self.HEADER_ERROR
 

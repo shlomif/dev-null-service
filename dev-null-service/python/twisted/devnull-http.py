@@ -31,7 +31,8 @@ class Echo(protocol.Protocol):
                 self.transport.write(
                     ("HTTP/1.1 200 OK\r\nContent-Type: text/html" +
                      "\r\n\r\n<html></html>").encode('utf-8'))
-                self.transport.loseConnection()
+                if "POST".encode('utf-8') not in self.header:
+                    self.transport.loseConnection()
             elif len(self.header) > self.MAX_HEADER_LEN:
                 self.state = self.HEADER_ERROR
 
